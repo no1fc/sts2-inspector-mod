@@ -21,6 +21,7 @@ namespace TestMode1
 
         public override void _Ready()
         {
+            _dumpedTypes.Clear();   // 씬 재로드마다 덤프 초기화 (static이라 재시작해도 유지되므로)
             var timer = new Timer
             {
                 WaitTime = ModSettings.Instance.PollIntervalSeconds,
@@ -340,35 +341,75 @@ namespace TestMode1
             }
         }
 
+        // 타입명 기준으로 덤프 여부 추적 — 게임 재시작마다 리셋되어 첫 틱에 항상 덤프
+        private static readonly HashSet<string> _dumpedTypes = new();
+
         private static void ExtractDescriptions(object collection, Dictionary<string, string> dict)
         {
             if (collection == null) return;
 
+            bool firstItem = true;
             foreach (var item in UnwrapCollection(collection))
             {
                 if (item == null) continue;
-                var t = item.GetType();
 
                 var name = ResolveDisplayName(item);
-                if (dict.ContainsKey(name)) continue;
+                if (dict.ContainsKey(name)) { firstItem = false; continue; }
 
-                // 1순위: HoverTip.Description — 유물/포션에서 이미 한국어 평문으로 확인됨
-                var hoverTip = GetProp(item, "HoverTip");
-                if (hoverTip != null)
+                // 1순위: HoverTip (단수) — 유물/포션
+                // 카드: HoverTip 없음 → HoverTips (복수 IEnumerable) 에서 Title 일치 항목 탐색
+                var hoverTip = GetProp(item, "HoverTip") ?? FindHoverTipViaInterface(item);
+                if (hoverTip == null)
                 {
-                    var htDesc = GetProp(hoverTip, "Description")?.ToString();
-                    if (!string.IsNullOrEmpty(htDesc))
+                    var hoverTipsObj = GetProp(item, "HoverTips");
+                    if (hoverTipsObj is System.Collections.IEnumerable htList)
                     {
-                        dict[name] = StripRichText(htDesc);
-                        continue;
+                        object firstHt = null;
+                        foreach (var ht in htList)
+                        {
+                            if (ht == null) continue;
+                            firstHt ??= ht;
+                            var htTitle = GetProp(ht, "Title")?.ToString();
+                            if (htTitle == name) { hoverTip = ht; break; }
+                        }
+                        hoverTip ??= firstHt;
                     }
                 }
 
-                // 2순위: DynamicDescription / Description (LocString) 및 기존 fallback chain
+                if (hoverTip != null)
+                {
+                    if (firstItem && _dumpedTypes.Add(item.GetType().FullName))
+                        DumpHoverTip(hoverTip, name);
+
+                    string htDesc = null;
+                    foreach (var field in new[] { "Description", "Body", "Subtitle", "Detail", "Text", "Content", "Info" })
+                    {
+                        var v = GetProp(hoverTip, field)?.ToString();
+                        if (!string.IsNullOrEmpty(v)) { htDesc = v; break; }
+                    }
+
+                    if (!string.IsNullOrEmpty(htDesc))
+                    {
+                        dict[name] = StripRichText(htDesc);
+                        GD.Print($"[Inspector] Desc (HoverTip): {name} → '{dict[name]}'");
+                        firstItem = false;
+                        continue;
+                    }
+                }
+                else if (firstItem && _dumpedTypes.Add(item.GetType().FullName))
+                {
+                    DumpStringProperties(item, name);
+                }
+
+                // 2순위: 직접 메서드/프로퍼티 탐색
                 object descObj = GetProp(item, "DynamicDescription")
                               ?? GetProp(item, "Description")
                               ?? GetProp(item, "RawDescription")
-                              ?? GetProp(item, "CardDescription");
+                              ?? GetProp(item, "CardDescription")
+                              ?? GetProp(item, "CardText")
+                              ?? GetProp(item, "LocalizedDescription")
+                              ?? GetProp(item, "DescriptionText")
+                              ?? GetProp(item, "FlavorText");
 
                 if (descObj == null)
                 {
@@ -376,19 +417,243 @@ namespace TestMode1
                     catch { }
                 }
 
+                // DLL 분석에서 발견된 GetCardText() 메서드 시도
                 if (descObj == null)
                 {
-                    var sub = GetProp(item, "CardData") ?? GetProp(item, "Data") ?? GetProp(item, "Model");
-                    if (sub != null)
+                    try { descObj = item.GetType().GetMethod("GetCardText", _allInstance)?.Invoke(item, null); }
+                    catch { }
+                }
+
+                // 필드 기반 탐색 — Description이 property가 아닌 field로 저장된 경우
+                if (descObj == null)
+                {
+                    foreach (var f in item.GetType().GetFields(_allInstance))
                     {
-                        descObj = GetProp(sub, "Description") ?? GetProp(sub, "RawDescription");
+                        if (f.Name.IndexOf("desc", StringComparison.OrdinalIgnoreCase) < 0 &&
+                            f.Name.IndexOf("text", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        try
+                        {
+                            var val = f.GetValue(item);
+                            if (val != null) { descObj = val; break; }
+                        }
+                        catch { }
                     }
                 }
 
-                var desc = ResolveLocString(descObj) ?? "";
+                // 서브 오브젝트 탐색 — CanonicalInstance 우선 (CardModel / RelicModel / PotionModel 패턴)
+                if (descObj == null)
+                {
+                    var sub = GetProp(item, "CanonicalInstance")
+                           ?? GetProp(item, "CardData")
+                           ?? GetProp(item, "Data")
+                           ?? GetProp(item, "Model");
+                    if (sub != null)
+                    {
+                        descObj = GetProp(sub, "DynamicDescription")
+                               ?? GetProp(sub, "Description")
+                               ?? GetProp(sub, "RawDescription");
+
+                        // sub 의 GetCardText() 메서드
+                        if (descObj == null)
+                        {
+                            try { descObj = sub.GetType().GetMethod("GetCardText", _allInstance)?.Invoke(sub, null); } catch { }
+                        }
+
+                        // sub 의 HoverTip (단수)
+                        if (descObj == null)
+                        {
+                            var subHt = GetProp(sub, "HoverTip");
+                            if (subHt != null)
+                            {
+                                foreach (var f in new[] { "Description", "Body", "Detail", "Text" })
+                                {
+                                    var v = GetProp(subHt, f)?.ToString();
+                                    if (!string.IsNullOrEmpty(v)) { descObj = v; break; }
+                                }
+                            }
+                        }
+
+                        // sub 의 HoverTips (복수)
+                        if (descObj == null)
+                        {
+                            var subHts = GetProp(sub, "HoverTips");
+                            if (subHts is System.Collections.IEnumerable subHtList)
+                            {
+                                object firstSubHt = null;
+                                foreach (var ht in subHtList)
+                                {
+                                    if (ht == null) continue;
+                                    firstSubHt ??= ht;
+                                    if (GetProp(ht, "Title")?.ToString() == name) { firstSubHt = ht; break; }
+                                }
+                                if (firstSubHt != null)
+                                {
+                                    foreach (var f in new[] { "Description", "Body", "Detail", "Text" })
+                                    {
+                                        var v = GetProp(firstSubHt, f)?.ToString();
+                                        if (!string.IsNullOrEmpty(v)) { descObj = v; break; }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 진단: descObj가 null이거나 string으로 해석 불가면 한 번만 덤프
+                        if (string.IsNullOrEmpty(ResolveLocString(descObj))
+                            && firstItem && _dumpedTypes.Add("CI:" + sub.GetType().FullName))
+                            DumpStringProperties(sub, $"CanonicalInstance of {name}");
+                    }
+                }
+
+                var desc = StripRichText(ResolveLocString(descObj) ?? "");
+
+                // 마지막 수단: Godot TranslationServer 직접 조회
+                // HoverTip.Id 형식이 "relics.CRACKED_CORE.description" 이므로
+                // 카드는 "cards.STRIKE_DEFECT.description" 형식으로 시도
+                if (string.IsNullOrEmpty(desc))
+                {
+                    var rawKey = GetProp(item, "Key")?.ToString()
+                              ?? GetProp(item, "CardModelId")?.ToString()
+                              ?? GetProp(item, "Id")?.ToString();
+                    if (!string.IsNullOrEmpty(rawKey))
+                    {
+                        // "card_strike_defect" → "STRIKE_DEFECT"
+                        // "CARD.STRIKE_DEFECT"  → "STRIKE_DEFECT"  (ModelId.ToString() 패턴)
+                        var locId = rawKey;
+                        if (locId.StartsWith("card_", StringComparison.OrdinalIgnoreCase)) locId = locId[5..];
+                        else if (locId.StartsWith("CARD.", StringComparison.Ordinal))   locId = locId[5..];
+                        else if (locId.StartsWith("RELIC.", StringComparison.Ordinal))  locId = locId[6..];
+                        else if (locId.StartsWith("POTION.", StringComparison.Ordinal)) locId = locId[7..];
+                        locId = locId.ToUpperInvariant();
+
+                        foreach (var fmt in new[] {
+                            $"cards.{locId}.description",
+                            $"card.{locId}.description",
+                            $"{locId}.description"
+                        })
+                        {
+                            var translated = Godot.TranslationServer.Translate(fmt);
+                            if (!string.IsNullOrEmpty(translated) && translated != fmt)
+                            {
+                                desc = StripRichText(translated);
+                                GD.Print($"[Inspector] Desc (TranslationServer '{fmt}'): {name} → '{desc}'");
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(desc))
-                    dict[name] = StripRichText(desc);
+                    dict[name] = desc;
+                else
+                    GD.Print($"[Inspector] Desc FAIL: {name} (id={GetProp(item, "Id")}, descObj={descObj?.GetType().Name ?? "null"})");
+
+                firstItem = false;
             }
+        }
+
+        private static object FindHoverTipViaInterface(object item)
+        {
+            foreach (var iface in item.GetType().GetInterfaces())
+            {
+                try
+                {
+                    var htProp = iface.GetProperty("HoverTip");
+                    var getter = htProp?.GetGetMethod(true);
+                    if (getter == null) continue;
+                    var map = item.GetType().GetInterfaceMap(iface);
+                    var idx = Array.IndexOf(map.InterfaceMethods, getter);
+                    if (idx < 0) continue;
+                    var result = map.TargetMethods[idx].Invoke(item, null);
+                    if (result != null)
+                    {
+                        GD.Print($"[Inspector] HoverTip via iface {iface.Name}: {result.GetType().FullName}");
+                        return result;
+                    }
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        private static void DumpHoverTip(object hoverTip, string itemName)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[Inspector] HoverTipDump for '{itemName}' ({hoverTip.GetType().FullName}):");
+            foreach (var p in hoverTip.GetType().GetProperties(_allInstance))
+            {
+                try
+                {
+                    var val = p.GetValue(hoverTip);
+                    if (val == null) continue;
+                    var raw = val.ToString() ?? "";
+                    if (raw == p.PropertyType.FullName) continue;
+                    if (raw.Length > 120) raw = raw[..120] + "…";
+                    sb.AppendLine($"  [{p.PropertyType.Name}] {p.Name} = {raw}");
+                }
+                catch { }
+            }
+            GD.Print(sb.ToString());
+        }
+
+        private static void DumpStringProperties(object item, string itemName)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[Inspector] PropDump for '{itemName}' ({item.GetType().FullName}):");
+
+            sb.AppendLine("  -- Properties --");
+            foreach (var p in item.GetType().GetProperties(_allInstance))
+            {
+                try
+                {
+                    var val = p.GetValue(item);
+                    if (val == null)
+                    {
+                        if (p.PropertyType == typeof(string) || p.PropertyType.Name.Contains("LocString"))
+                            sb.AppendLine($"  [{p.PropertyType.Name}] {p.Name} = NULL");
+                        continue;
+                    }
+                    var raw = val.ToString() ?? "";
+                    if (raw == p.PropertyType.FullName) continue;
+                    if (raw.Length > 120) raw = raw[..120] + "…";
+                    sb.AppendLine($"  [{p.PropertyType.Name}] {p.Name} = {raw}");
+                }
+                catch { }
+            }
+
+            sb.AppendLine("  -- Fields --");
+            foreach (var f in item.GetType().GetFields(_allInstance))
+            {
+                try
+                {
+                    var val = f.GetValue(item);
+                    if (val == null)
+                    {
+                        if (f.FieldType == typeof(string) || f.FieldType.Name.Contains("LocString"))
+                            sb.AppendLine($"  [FIELD {f.FieldType.Name}] {f.Name} = NULL");
+                        continue;
+                    }
+                    var raw = val.ToString() ?? "";
+                    if (raw == f.FieldType.FullName) continue;
+                    if (raw.Length > 120) raw = raw[..120] + "…";
+                    sb.AppendLine($"  [FIELD {f.FieldType.Name}] {f.Name} = {raw}");
+                }
+                catch { }
+            }
+
+            sb.AppendLine("  -- Interfaces (HoverTip/Description) --");
+            foreach (var iface in item.GetType().GetInterfaces())
+            {
+                try
+                {
+                    bool hasHt = iface.GetProperty("HoverTip") != null;
+                    bool hasDe = iface.GetProperty("Description") != null;
+                    if (hasHt || hasDe)
+                        sb.AppendLine($"  [IFACE] {iface.FullName} HoverTip={hasHt} Description={hasDe}");
+                }
+                catch { }
+            }
+
+            GD.Print(sb.ToString());
         }
 
         private static void ExtractStats(object collection, Dictionary<string, string> dict)
@@ -556,24 +821,54 @@ namespace TestMode1
             return null;
         }
 
-        private static string StripRichText(string text) =>
-            Regex.Replace(text, @"\[[^\]]+\]", "").Trim();
+        private static string StripRichText(string text)
+        {
+            text = Regex.Replace(text, @"\[[^\]]+\]", "");  // [b], [color=...] 등 rich text 태그
+            text = Regex.Replace(text, @"\{[^}]+\}",   ""); // {Damage.diff()} 등 SmartFormat 플레이스홀더
+            return Regex.Replace(text, @" {2,}", " ").Trim();
+        }
 
-        // LocString 래퍼에서 실제 문자열 추출 (cards의 Description LocString 등)
+        // LocString 래퍼에서 실제 문자열 추출 — 타입명 검사 없이 모든 오브젝트에 시도
         private static string ResolveLocString(object obj)
         {
             if (obj == null) return null;
+            if (obj is string s) return string.IsNullOrEmpty(s) ? null : s;
+
             var t = obj.GetType();
-            if (t.Namespace?.Contains("Localization") == true || t.Name.Contains("LocString"))
+            if (t.IsPrimitive) return obj.ToString();
+
+            // 알려진 LocString 프로퍼티명을 타입 무관하게 탐색
+            var result = t.GetProperty("Value",         _allInstance)?.GetValue(obj)?.ToString()
+                      ?? t.GetProperty("Text",          _allInstance)?.GetValue(obj)?.ToString()
+                      ?? t.GetProperty("Str",           _allInstance)?.GetValue(obj)?.ToString()
+                      ?? t.GetProperty("LocalizedText", _allInstance)?.GetValue(obj)?.ToString()
+                      ?? t.GetProperty("Localized",     _allInstance)?.GetValue(obj)?.ToString()
+                      ?? t.GetProperty("Current",       _allInstance)?.GetValue(obj)?.ToString();
+
+            if (!string.IsNullOrEmpty(result)) return result;
+
+            // STS2 LocString: GetFormattedText() → SmartFormat with variables
+            //                GetRawText()       → raw template string
+            var locTable = t.GetProperty("LocTable", _allInstance)?.GetValue(obj)?.ToString();
+            if (!string.IsNullOrEmpty(locTable))
             {
-                return t.GetProperty("Value")?.GetValue(obj)?.ToString()
-                    ?? t.GetProperty("Text")?.GetValue(obj)?.ToString()
-                    ?? t.GetProperty("Str")?.GetValue(obj)?.ToString()
-                    ?? t.GetProperty("LocalizedText")?.GetValue(obj)?.ToString()
-                    ?? t.GetProperty("Localized")?.GetValue(obj)?.ToString()
-                    ?? t.GetProperty("Current")?.GetValue(obj)?.ToString();
+                try
+                {
+                    var formatted = t.GetMethod("GetFormattedText", _allInstance)?.Invoke(obj, null)?.ToString();
+                    if (!string.IsNullOrEmpty(formatted)) return formatted;
+                }
+                catch { }
+                try
+                {
+                    var raw = t.GetMethod("GetRawText", _allInstance)?.Invoke(obj, null)?.ToString();
+                    if (!string.IsNullOrEmpty(raw)) return raw;
+                }
+                catch { }
             }
-            return obj.ToString();
+
+            // ToString()이 클래스 전체 이름이 아닐 때만 반환
+            var str = obj.ToString();
+            return (str != null && str != t.FullName && str != t.Name) ? str : null;
         }
     }
 }
