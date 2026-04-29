@@ -25,10 +25,19 @@ public static class ModStart
 
 public partial class InspectorBootstrapper : Node
 {
+    private CanvasLayer _canvas;
+
+    public override void _UnhandledInput(InputEvent ev)
+    {
+        if (ev is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F7)
+            _canvas.Visible = !_canvas.Visible;
+    }
+
     public override void _Ready()
     {
-        var canvas = new CanvasLayer { Layer = 128 };
-        AddChild(canvas);
+        _canvas = new CanvasLayer { Layer = 128 };
+        AddChild(_canvas);
+        var canvas = _canvas;
 
         _ = new ImageCache(TestMode1.ModSettings.Instance.ImageBasePath);
 

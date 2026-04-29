@@ -14,7 +14,7 @@ namespace TestMode1.UI
         private VBoxContainer _playerRows;
         private ScrollContainer _scroll;
         private Button _btnCollapse;
-        private CheckButton _btnDeck, _btnHand, _btnRelics, _btnPotions;
+        private CheckButton _btnDeck, _btnHand, _btnRelics, _btnPotions, _btnBuffs;
         private bool _collapsed = false;
 
         private readonly Dictionary<string, HBoxContainer> _rowsByPlayerId = new();
@@ -44,10 +44,14 @@ namespace TestMode1.UI
             _btnRelics  = MakeToggle("유물", settings.ShowRelics,  () => { ModSettings.Instance.SetToggle("relics",  _btnRelics.ButtonPressed);  RefreshAllRows(); });
             _btnPotions = MakeToggle("포션", settings.ShowPotions, () => { ModSettings.Instance.SetToggle("potions", _btnPotions.ButtonPressed); RefreshAllRows(); });
 
+            _btnBuffs = MakeToggle("버프", settings.ShowBuffs,
+                () => { ModSettings.Instance.SetToggle("buffs", _btnBuffs.ButtonPressed); RefreshAllRows(); });
+
             toggleBar.AddChild(_btnDeck);
             toggleBar.AddChild(_btnHand);
             toggleBar.AddChild(_btnRelics);
             toggleBar.AddChild(_btnPotions);
+            toggleBar.AddChild(_btnBuffs);
 
             _scroll = new ScrollContainer
             {
@@ -64,7 +68,7 @@ namespace TestMode1.UI
         {
             _lastSnaps[snap.PlayerId] = snap;
             if (!_rowsByPlayerId.ContainsKey(snap.PlayerId))
-                CreateRow(snap.PlayerId, snap.PlayerName);
+                CreateRow(snap);
             RefreshRow(snap.PlayerId, snap);
         }
 
@@ -100,31 +104,37 @@ namespace TestMode1.UI
             }
         }
 
-        private HBoxContainer CreateRow(string playerId, string playerName)
+        private HBoxContainer CreateRow(PlayerSnapshot snap)
         {
             var row = new HBoxContainer();
 
+            var displayText = snap.CharacterName.Length > 0
+                ? $"{snap.PlayerName}\n{snap.CharacterName}"
+                : snap.PlayerName;
+
             var nameBtn = new Button
             {
-                Text = playerName,
+                Text = displayText,
                 Flat = true,
-                CustomMinimumSize = new Vector2(100, 0),
+                CustomMinimumSize = new Vector2(120, 0),
                 Alignment = HorizontalAlignment.Left
             };
-            nameBtn.Pressed += () => EmitSignal(SignalName.PlayerRowClicked, playerId);
+            nameBtn.Pressed += () => EmitSignal(SignalName.PlayerRowClicked, snap.PlayerId);
 
             var deckLbl   = new Label { CustomMinimumSize = new Vector2(50, 0) };
             var relicLbl  = new Label { CustomMinimumSize = new Vector2(50, 0) };
             var potionLbl = new Label { CustomMinimumSize = new Vector2(50, 0) };
+            var buffLbl   = new Label { CustomMinimumSize = new Vector2(50, 0) };
 
             row.AddChild(nameBtn);
             row.AddChild(deckLbl);
             row.AddChild(relicLbl);
             row.AddChild(potionLbl);
+            row.AddChild(buffLbl);
 
             _playerRows.AddChild(row);
-            _rowsByPlayerId[playerId] = row;
-            _countLabelsByPlayerId[playerId] = new[] { deckLbl, relicLbl, potionLbl };
+            _rowsByPlayerId[snap.PlayerId] = row;
+            _countLabelsByPlayerId[snap.PlayerId] = new[] { deckLbl, relicLbl, potionLbl, buffLbl };
 
             return row;
         }
@@ -136,9 +146,11 @@ namespace TestMode1.UI
             labels[0].Text    = s.ShowDeck    ? $"덱:{snap.DeckCount}"   : "";
             labels[1].Text    = s.ShowRelics  ? $"유:{snap.RelicCount}"  : "";
             labels[2].Text    = s.ShowPotions ? $"포:{snap.PotionCount}" : "";
+            labels[3].Text    = s.ShowBuffs   ? $"버:{snap.BuffCount}"   : "";
             labels[0].Visible = s.ShowDeck;
             labels[1].Visible = s.ShowRelics;
             labels[2].Visible = s.ShowPotions;
+            labels[3].Visible = s.ShowBuffs;
         }
 
         private void RefreshAllRows()
@@ -153,6 +165,7 @@ namespace TestMode1.UI
             _collapsed = !_collapsed;
             _scroll.Visible = !_collapsed;
             _btnCollapse.Text = _collapsed ? "+" : "─";
+            ResetSize();
         }
 
         private static CheckButton MakeToggle(string text, bool initial, System.Action onToggle)

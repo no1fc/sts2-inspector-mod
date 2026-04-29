@@ -12,6 +12,7 @@ namespace TestMode1
         public bool ShowHand { get; private set; } = true;
         public bool ShowRelics { get; private set; } = true;
         public bool ShowPotions { get; private set; } = true;
+        public bool ShowBuffs   { get; private set; } = true;
         public float PanelX { get; private set; } = 1600f;
         public float PanelY { get; private set; } = 300f;
         public float PollIntervalSeconds { get; private set; } = 1.5f;
@@ -29,6 +30,7 @@ namespace TestMode1
                 settings.ShowHand    = (bool)cfg.GetValue("display", "show_hand",    true);
                 settings.ShowRelics  = (bool)cfg.GetValue("display", "show_relics",  true);
                 settings.ShowPotions = (bool)cfg.GetValue("display", "show_potions", true);
+                settings.ShowBuffs   = (bool)cfg.GetValue("display", "show_buffs",   true);
                 settings.PanelX      = (float)cfg.GetValue("display", "panel_x",    1600f);
                 settings.PanelY      = (float)cfg.GetValue("display", "panel_y",    300f);
                 settings.PollIntervalSeconds = (float)cfg.GetValue("performance", "poll_interval_seconds", 1.5f);
@@ -47,6 +49,7 @@ namespace TestMode1
             cfg.SetValue("display", "show_hand",    ShowHand);
             cfg.SetValue("display", "show_relics",  ShowRelics);
             cfg.SetValue("display", "show_potions", ShowPotions);
+            cfg.SetValue("display", "show_buffs",   ShowBuffs);
             cfg.SetValue("display", "panel_x",      PanelX);
             cfg.SetValue("display", "panel_y",      PanelY);
             cfg.SetValue("performance", "poll_interval_seconds", PollIntervalSeconds);
@@ -61,6 +64,7 @@ namespace TestMode1
                 case "hand":    ShowHand    = value; break;
                 case "relics":  ShowRelics  = value; break;
                 case "potions": ShowPotions = value; break;
+                case "buffs":   ShowBuffs   = value; break;
             }
             Save();
         }

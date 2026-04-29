@@ -13,7 +13,7 @@ namespace TestMode1.UI
 
         private Label         _titleLabel;
         private TabContainer  _tabs;
-        private VBoxContainer _deckPage, _handPage, _relicPage, _potionPage;
+        private VBoxContainer _deckPage, _handPage, _relicPage, _potionPage, _buffPage;
 
         private bool _dragging;
 
@@ -47,11 +47,13 @@ namespace TestMode1.UI
             (_handPage,   var hs) = MakePage("패");
             (_relicPage,  var rs) = MakePage("유물");
             (_potionPage, var ps) = MakePage("포션");
+            (_buffPage,   var bfs) = MakePage("버프");
 
             _tabs.AddChild(ds);
             _tabs.AddChild(hs);
             _tabs.AddChild(rs);
             _tabs.AddChild(ps);
+            _tabs.AddChild(bfs);
         }
 
         public void Initialize(ImageTooltip tooltip)
@@ -65,7 +67,7 @@ namespace TestMode1.UI
             _lastSnap = snap;
             _currentPlayerId = snap.PlayerId;
             _titleLabel.Text = snap.PlayerName;
-            RefreshContent(snap);
+            RefreshContent(snap, preserveTab: false);
             ClampToScreen();
             Visible = true;
         }
@@ -110,8 +112,9 @@ namespace TestMode1.UI
                 Mathf.Clamp(Position.Y, 10, vSize.Y - h - 10));
         }
 
-        private void RefreshContent(PlayerSnapshot snap)
+        private void RefreshContent(PlayerSnapshot snap, bool preserveTab = true)
         {
+            var savedTab = preserveTab ? _tabs.CurrentTab : -1;
             _pool?.ReleaseAll();
             if (_pool == null) return;
 
@@ -121,16 +124,76 @@ namespace TestMode1.UI
             var stats   = snap.NameToStats;
 
             if (s.ShowDeck)    PopulateTab(_deckPage,   snap.DeckCardIds, "드로우 덱", 0, ImageCache.ItemType.Card,   descs, imgKeys, stats);
-            if (s.ShowHand)    PopulateTab(_handPage,   snap.HandCardIds, "패",   1, ImageCache.ItemType.Card,   descs, imgKeys, stats);
+            if (s.ShowHand)
+            {
+                if (snap.HandCardEntries.Count > 0)
+                    PopulateHandTab(_handPage, snap.HandCardEntries, "패", 1, ImageCache.ItemType.Card, descs, imgKeys, stats);
+                else
+                    PopulateTab(_handPage, snap.HandCardIds, "패", 1, ImageCache.ItemType.Card, descs, imgKeys, stats);
+            }
             if (s.ShowRelics)  PopulateTab(_relicPage,  snap.RelicIds,    "유물", 2, ImageCache.ItemType.Relic,  descs, imgKeys, stats);
             if (s.ShowPotions) PopulateTab(_potionPage, snap.PotionIds,   "포션", 3, ImageCache.ItemType.Potion, descs, imgKeys, stats);
+            if (s.ShowBuffs)   PopulateBuffTab(_buffPage, snap.Buffs, "버프", 4);
 
             _tabs.SetTabHidden(0, !s.ShowDeck);
             _tabs.SetTabHidden(1, !s.ShowHand);
             _tabs.SetTabHidden(2, !s.ShowRelics);
             _tabs.SetTabHidden(3, !s.ShowPotions);
+            _tabs.SetTabHidden(4, !s.ShowBuffs);
 
-            SelectFirstNonEmptyTab(snap);
+            if (savedTab >= 0 && savedTab < _tabs.GetTabCount() && !_tabs.IsTabHidden(savedTab))
+                _tabs.CurrentTab = savedTab;
+            else
+                SelectFirstNonEmptyTab(snap);
+        }
+
+        private void PopulateHandTab(VBoxContainer page,
+                                     List<HandCardEntry> entries,
+                                     string title, int tabIdx,
+                                     ImageCache.ItemType itemType,
+                                     Dictionary<string, string> descriptions,
+                                     Dictionary<string, string> imageKeys,
+                                     Dictionary<string, string> statsMap)
+        {
+            foreach (var entry in entries)
+            {
+                var sb = new System.Text.StringBuilder(entry.Name);
+                if (entry.Cost.HasValue)
+                {
+                    var c = entry.Cost.Value == -1 ? "X" : entry.Cost.Value.ToString();
+                    sb.Append($"   코스트:{c}");
+                }
+                if (entry.EffectiveDamage.HasValue && entry.EffectiveDamage.Value > 0)
+                    sb.Append($"   피해:{entry.EffectiveDamage.Value}");
+                if (entry.EffectiveBlock.HasValue && entry.EffectiveBlock.Value > 0)
+                    sb.Append($"   방어:{entry.EffectiveBlock.Value}");
+
+                var desc   = descriptions.GetValueOrDefault(entry.Name, "");
+                var imgKey = imageKeys.GetValueOrDefault(entry.Name, ImageCache.ToSnakeCase(entry.Name));
+                var st     = statsMap.GetValueOrDefault(entry.Name, "");
+                _pool.Acquire(sb.ToString(), imgKey, itemType, page, desc, st);
+            }
+            _tabs.SetTabTitle(tabIdx, $"{title} ({entries.Count})");
+        }
+
+        private void PopulateBuffTab(VBoxContainer page, List<BuffEntry> buffs,
+                                     string title, int tabIdx)
+        {
+            foreach (var buff in buffs)
+            {
+                string display;
+                if (buff.Amount != 0)
+                {
+                    var sign = (!buff.IsDebuff && buff.Amount > 0) ? "+" : "";
+                    display = $"{buff.Name}   {sign}{buff.Amount}";
+                }
+                else
+                {
+                    display = buff.Name;
+                }
+                _pool.Acquire(display, "", ImageCache.ItemType.Relic, page, "", "");
+            }
+            _tabs.SetTabTitle(tabIdx, $"{title} ({buffs.Count})");
         }
 
         private void PopulateTab(VBoxContainer page, List<string> ids,
@@ -159,7 +222,7 @@ namespace TestMode1.UI
 
         private void SelectFirstNonEmptyTab(PlayerSnapshot snap)
         {
-            int[] counts = { snap.DeckCount, snap.HandCount, snap.RelicCount, snap.PotionCount };
+            int[] counts = { snap.DeckCount, snap.HandCount, snap.RelicCount, snap.PotionCount, snap.BuffCount };
             for (int i = 0; i < counts.Length; i++)
             {
                 if (counts[i] > 0 && !_tabs.IsTabHidden(i))
