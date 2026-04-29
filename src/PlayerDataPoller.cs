@@ -22,6 +22,7 @@ namespace TestMode1
         public override void _Ready()
         {
             _dumpedTypes.Clear();   // 씬 재로드마다 덤프 초기화 (static이라 재시작해도 유지되므로)
+
             var timer = new Timer
             {
                 WaitTime = ModSettings.Instance.PollIntervalSeconds,
@@ -244,33 +245,34 @@ namespace TestMode1
                 snap.PlayerName = playerId;
             }
 
-            var deck    = GetProp(player, "Deck");
-            var relics  = GetProp(player, "Relics");
-            var potions = GetProp(player, "Potions");
-            var hand    = FindHandPile(GetProp(player, "Piles"));
+            var pilesRaw = GetProp(player, "Piles");
+            var drawPile = FindDrawPile(pilesRaw);
+            var hand     = FindHandPile(pilesRaw);
+            var relics   = GetProp(player, "Relics");
+            var potions  = GetProp(player, "Potions");
 
-            snap.DeckCardIds = ExtractTitles(deck);
+            snap.DeckCardIds = ExtractTitles(drawPile);
             snap.RelicIds    = ExtractTitles(relics);
             snap.PotionIds   = ExtractTitles(potions);
             snap.HandCardIds = ExtractTitles(hand);
 
             snap.NameToDescription = new Dictionary<string, string>();
-            ExtractDescriptions(deck,    snap.NameToDescription);
-            ExtractDescriptions(relics,  snap.NameToDescription);
-            ExtractDescriptions(potions, snap.NameToDescription);
-            ExtractDescriptions(hand,    snap.NameToDescription);
+            ExtractDescriptions(drawPile, snap.NameToDescription);
+            ExtractDescriptions(relics,   snap.NameToDescription);
+            ExtractDescriptions(potions,  snap.NameToDescription);
+            ExtractDescriptions(hand,     snap.NameToDescription);
 
             snap.NameToImageKey = new Dictionary<string, string>();
-            ExtractImageKeys(deck,    snap.NameToImageKey);
-            ExtractImageKeys(relics,  snap.NameToImageKey);
-            ExtractImageKeys(potions, snap.NameToImageKey);
-            ExtractImageKeys(hand,    snap.NameToImageKey);
+            ExtractImageKeys(drawPile, snap.NameToImageKey);
+            ExtractImageKeys(relics,   snap.NameToImageKey);
+            ExtractImageKeys(potions,  snap.NameToImageKey);
+            ExtractImageKeys(hand,     snap.NameToImageKey);
 
             snap.NameToStats = new Dictionary<string, string>();
-            ExtractStats(deck,    snap.NameToStats);
-            ExtractStats(relics,  snap.NameToStats);
-            ExtractStats(potions, snap.NameToStats);
-            ExtractStats(hand,    snap.NameToStats);
+            ExtractStats(drawPile, snap.NameToStats);
+            ExtractStats(relics,   snap.NameToStats);
+            ExtractStats(potions,  snap.NameToStats);
+            ExtractStats(hand,     snap.NameToStats);
 
             GD.Print($"[Inspector] Snap [{playerId}] name={snap.PlayerName} deck={snap.DeckCount} relics={snap.RelicCount} potions={snap.PotionCount} hand={snap.HandCount}");
             return snap;
@@ -778,6 +780,29 @@ namespace TestMode1
             return null;
         }
 
+        // Piles[] 배열에서 드로우 파일 CardPile 반환 (전투 중에만 존재)
+        // "Deck"는 마스터 덱이므로 제외; Hand/Discard/Exhaust/Void 제외 후 남는 pile이 드로우 파일
+        private static object FindDrawPile(object pilesRaw)
+        {
+            if (pilesRaw is not System.Collections.IEnumerable pilesEnum) return null;
+
+            var piles = pilesEnum.Cast<object>().Where(p => p != null).ToList();
+            if (piles.Count == 0) return null;
+
+            foreach (var p in piles)
+            {
+                var t = GetProp(p, "Type")?.ToString();
+                if (t is "DrawPile" or "Draw" or "Library") return p;
+            }
+            foreach (var p in piles)
+            {
+                var t = GetProp(p, "Type")?.ToString();
+                if (t is null or "Deck" or "Hand" or "Discard" or "Exhaust" or "Void") continue;
+                return p;
+            }
+            return null;
+        }
+
         // wrapper 타입(DeckModel 등)을 unwrap해 IEnumerable 반환
         private static System.Collections.IEnumerable UnwrapCollection(object collection)
         {
@@ -847,17 +872,11 @@ namespace TestMode1
 
             if (!string.IsNullOrEmpty(result)) return result;
 
-            // STS2 LocString: GetFormattedText() → SmartFormat with variables
-            //                GetRawText()       → raw template string
+            // STS2 LocString: GetRawText() → raw template string (StripRichText가 {placeholder} 제거)
+            // GetFormattedText()는 호출 시 STS2가 내부 에러를 로그에 출력하므로 사용 안 함
             var locTable = t.GetProperty("LocTable", _allInstance)?.GetValue(obj)?.ToString();
             if (!string.IsNullOrEmpty(locTable))
             {
-                try
-                {
-                    var formatted = t.GetMethod("GetFormattedText", _allInstance)?.Invoke(obj, null)?.ToString();
-                    if (!string.IsNullOrEmpty(formatted)) return formatted;
-                }
-                catch { }
                 try
                 {
                     var raw = t.GetMethod("GetRawText", _allInstance)?.Invoke(obj, null)?.ToString();

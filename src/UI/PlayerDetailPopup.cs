@@ -42,7 +42,7 @@ namespace TestMode1.UI
             };
             vbox.AddChild(_tabs);
 
-            (_deckPage,   var ds) = MakePage("덱");
+            (_deckPage,   var ds) = MakePage("드로우 덱");
             (_handPage,   var hs) = MakePage("패");
             (_relicPage,  var rs) = MakePage("유물");
             (_potionPage, var ps) = MakePage("포션");
@@ -109,7 +109,7 @@ namespace TestMode1.UI
             var imgKeys = snap.NameToImageKey;
             var stats   = snap.NameToStats;
 
-            if (s.ShowDeck)    PopulateTab(_deckPage,   snap.DeckCardIds, "덱",   0, ImageCache.ItemType.Card,   descs, imgKeys, stats);
+            if (s.ShowDeck)    PopulateTab(_deckPage,   snap.DeckCardIds, "드로우 덱", 0, ImageCache.ItemType.Card,   descs, imgKeys, stats);
             if (s.ShowHand)    PopulateTab(_handPage,   snap.HandCardIds, "패",   1, ImageCache.ItemType.Card,   descs, imgKeys, stats);
             if (s.ShowRelics)  PopulateTab(_relicPage,  snap.RelicIds,    "유물", 2, ImageCache.ItemType.Relic,  descs, imgKeys, stats);
             if (s.ShowPotions) PopulateTab(_potionPage, snap.PotionIds,   "포션", 3, ImageCache.ItemType.Potion, descs, imgKeys, stats);

@@ -5,7 +5,7 @@ A Slay the Spire 2 mod that lets you inspect other players' **deck, hand, relics
 ## Features
 
 - **Overlay panel** — shows all players in the current run with a compact summary
-- **Detail popup** — click any player to open a tabbed view (Deck / Hand / Relics / Potions)
+- **Detail popup** — click any player to open a tabbed view (Draw Pile / Hand / Relics / Potions)
 - **Image tooltips** — hover over any card, relic, or potion to see its art and description
 - **Draggable UI** — move the overlay panel and detail popup anywhere on screen
 - **Persistent settings** — panel position and visible columns are saved between sessions
