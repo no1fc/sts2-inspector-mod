@@ -1,0 +1,10 @@
+{
+    "id": "sts2-inspector-mod",
+    "name": "STS2 Multiplayer Inspector",
+    "author": "SD",
+    "description": "Shows other players' deck, hand, relics, and potions in multiplayer",
+    "version": "0.1.0",
+    "has_pck": false,
+    "has_dll": true,
+    "affects_gameplay": false
+  }

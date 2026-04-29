@@ -1,0 +1,15 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Build output
+*.dll
+*.pdb
+bin/
+obj/
+
+# Claude Code session files
+.claude/
+
+# Internal dev docs
+docs/
