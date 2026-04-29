@@ -9,17 +9,13 @@ public static class ModStart
 {
     public static void ModInit()
     {
-        GD.Print("[Inspector] Initializing...");
-
         TestMode1.ModSettings.Load();
 
-        var harmony = new Harmony("testmode1.inspector");
+        var harmony = new Harmony("sts2-inspector-mod.inspector");
         harmony.PatchAll();
 
         var bootstrapper = new InspectorBootstrapper();
         (Engine.GetMainLoop() as SceneTree)?.Root.CallDeferred("add_child", bootstrapper);
-
-        GD.Print("[Inspector] Initialized.");
     }
 }
 
@@ -46,8 +42,10 @@ public partial class InspectorBootstrapper : Node
 
         var overlay = new OverlayPanel();
         var popup   = new PlayerDetailPopup();
+        var resizer = new PopupResizer(popup);
         canvas.AddChild(overlay);
         canvas.AddChild(popup);
+        canvas.AddChild(resizer);
         popup.Initialize(tooltip);
 
         popup.Position = new Vector2(600f, 200f);
@@ -70,7 +68,5 @@ public partial class InspectorBootstrapper : Node
         };
 
         overlay.ToggleChanged += () => popup.ForceRefreshCurrent();
-
-        GD.Print("[Inspector] UI ready.");
     }
 }

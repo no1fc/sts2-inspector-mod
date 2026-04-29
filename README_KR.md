@@ -10,6 +10,7 @@ Slay the Spire 2 멀티플레이 중 다른 플레이어의 **덱, 패, 유물, 
 - **상세 팝업** — 플레이어 이름 클릭 시 탭 형식으로 상세 정보 표시 (드로우 덱 / 패 / 유물 / 포션 / 버프)
 - **실시간 패 스탯** — 패 탭에서 각 카드의 현재 코스트, 피해, 방어력을 게임 엔진이 계산한 값으로 표시 (강도·민첩성 및 전투 중 보너스 반영)
 - **이미지 툴팁** — 카드·유물·포션 위에 마우스를 올리면 아트와 설명 표시
+- **팝업 크기 조절** — 상세 팝업 우하단 모서리를 드래그해 크기 조절 가능
 - **드래그 이동** — 오버레이 패널과 상세 팝업을 화면 어디로든 이동 가능
 - **접기 토글** — `─` 버튼 클릭 시 패널이 토글 바만 남도록 축소; `+` 클릭 시 다시 확장
 - **F7 단축키** — 모드 UI 전체를 켜거나 끔
@@ -33,7 +34,7 @@ Slay the Spire 2 멀티플레이 중 다른 플레이어의 **덱, 패, 유물, 
    ```
    빌드 성공 시 DLL이 자동으로 복사됩니다:
    ```
-   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\testmode1\
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2-inspector-mod\
    ```
 
 2. `ModSettings`에 설정된 경로(기본값: `C:\AI_Folder\ClaudeCode\SlaytheSpire2\data_sts2\`)에 이미지 에셋을 배치합니다:
@@ -80,6 +81,7 @@ ModStart (InspectorBootstrapper._Ready)
   ├─ ImageTooltip        — 호버 툴팁 (이미지 + 설명)
   ├─ OverlayPanel        — 항상 표시되는 플레이어 목록 (접기 지원)
   ├─ PlayerDetailPopup   — 플레이어별 탭 팝업 (드로우 덱/패/유물/포션/버프)
+  ├─ PopupResizer        — 상세 팝업 크기 조절 핸들
   └─ PlayerDataPoller    — Reflection으로 1.5초마다 게임 상태 폴링
        ├─ PlayerUpdated  → OverlayPanel + PlayerDetailPopup 갱신
        └─ PlayerRemoved  → OverlayPanel 정리
@@ -98,19 +100,6 @@ STS2는 공개 모딩 API를 제공하지 않으므로, `RunManager.Instance`에
 
 `CanonicalValue`(게임 엔진의 실시간 계산값)가 있으면 우선 사용하고, 없으면 `BaseValue`로 폴백합니다.
 실시간 값을 사용할 때는 강도·민첩성이 이미 포함되어 있으므로 중복 적용하지 않습니다.
-
-## 디버깅
-
-게임 로그를 아래 접두사로 필터링합니다:
-
-```
-[Inspector]   # 폴링, 스냅샷, 패 카드 스탯
-[ImageCache]  # 텍스처 로드 성공 / 실패
-```
-
-타입별 최초 1회 덤프 (세션당 한 번):
-- `[Inspector] PlayerProps: ...` — 플레이어 객체 프로퍼티 (Steam 이름 필드 식별용)
-- `[Inspector] VarSet '...': ...` — 카드 변수 키와 값
 
 ## 라이선스
 

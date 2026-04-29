@@ -47,6 +47,29 @@ namespace TestMode1.UI
             return node;
         }
 
+        public HoverLabel AcquireRow(string c0, string c1, string c2, string c3,
+                                     string imageKey, ImageCache.ItemType itemType, Node target,
+                                     string description = "", string stats = "")
+        {
+            HoverLabel node;
+            if (_available.Count > 0)
+            {
+                node = _available[^1];
+                _available.RemoveAt(_available.Count - 1);
+            }
+            else
+            {
+                node = new HoverLabel();
+                _storage.AddChild(node);
+            }
+
+            node.Reparent(target);
+            node.ConfigureRow(c0, c1, c2, c3, imageKey, itemType, _tooltip, description, stats);
+            node.Visible = true;
+            _inUse.Add(node);
+            return node;
+        }
+
         public void ReleaseAll()
         {
             foreach (var n in _inUse)

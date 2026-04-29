@@ -4,6 +4,7 @@
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>testmode1</RootNamespace>
+    <AssemblyName>sts2-inspector-mod</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,12 +17,12 @@
 
   <Target Name="CopyToModsFolder" AfterTargets="Build">
     <PropertyGroup>
-      <ModsFolder>C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\testmode1</ModsFolder>
-      <SourceDll>$(OutputPath)testmode1.dll</SourceDll>
+      <ModsFolder>C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2-inspector-mod</ModsFolder>
+      <SourceDll>$(OutputPath)sts2-inspector-mod.dll</SourceDll>
     </PropertyGroup>
     <Message Text="Copying mod files to STS2 mods folder..." Importance="high" />
     <Copy SourceFiles="$(SourceDll)" DestinationFolder="$(ModsFolder)" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\mod_manifest.json" DestinationFiles="$(ModsFolder)\testmode1.json" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\mod_manifest.json" DestinationFiles="$(ModsFolder)\sts2-inspector-mod.json" SkipUnchangedFiles="false" />
     <Message Text="Done: copied DLL + manifest to $(ModsFolder)" Importance="high" />
   </Target>
 </Project>

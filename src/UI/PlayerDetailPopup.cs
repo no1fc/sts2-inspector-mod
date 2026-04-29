@@ -6,6 +6,9 @@ namespace TestMode1.UI
 {
     public partial class PlayerDetailPopup : PanelContainer
     {
+        public const float MinW = 280f;
+        public const float MinH = 280f;
+
         private CardNodePool  _pool;
         private string        _currentPlayerId;
         private ImageTooltip  _tooltip;
@@ -19,35 +22,54 @@ namespace TestMode1.UI
 
         public override void _Ready()
         {
-            CustomMinimumSize = new Vector2(320, 420);
+            CustomMinimumSize = new Vector2(MinW, MinH);
+            Size              = new Vector2(420, 480);
             MouseFilter       = MouseFilterEnum.Stop;
             Visible           = false;
 
-            var vbox = new VBoxContainer();
+            AddThemeStyleboxOverride("panel",
+                InspectorTheme.MakeBox(InspectorTheme.BgPanel, InspectorTheme.Border, 6, 10, 8));
+
+            var vbox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             AddChild(vbox);
 
             var titleBar = new HBoxContainer();
             vbox.AddChild(titleBar);
 
             _titleLabel = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            _titleLabel.AddThemeColorOverride("font_color", InspectorTheme.Gold);
+            _titleLabel.AddThemeFontSizeOverride("font_size", 16);
             titleBar.AddChild(_titleLabel);
 
-            var closeBtn = new Button { Text = "X" };
+            var closeBtn = new Button { Text = "✕", Flat = true };
+            closeBtn.AddThemeColorOverride("font_color",         InspectorTheme.TextDim);
+            closeBtn.AddThemeColorOverride("font_color_hover",   InspectorTheme.CloseHover);
+            closeBtn.AddThemeColorOverride("font_color_pressed", InspectorTheme.CloseHover);
+            closeBtn.AddThemeStyleboxOverride("normal",  InspectorTheme.MakeTransparent());
+            closeBtn.AddThemeStyleboxOverride("hover",   InspectorTheme.MakeTransparent());
+            closeBtn.AddThemeStyleboxOverride("pressed", InspectorTheme.MakeTransparent());
             closeBtn.Pressed += () => Visible = false;
             titleBar.AddChild(closeBtn);
 
             _tabs = new TabContainer
             {
                 SizeFlagsVertical = SizeFlags.ExpandFill,
-                CustomMinimumSize = new Vector2(0, 360)
+                CustomMinimumSize = new Vector2(0, 100)
             };
             vbox.AddChild(_tabs);
 
-            (_deckPage,   var ds) = MakePage("드로우 덱");
-            (_handPage,   var hs) = MakePage("패");
-            (_relicPage,  var rs) = MakePage("유물");
-            (_potionPage, var ps) = MakePage("포션");
-            (_buffPage,   var bfs) = MakePage("버프");
+            var tabPanelStyle = new StyleBoxFlat { DrawCenter = false };
+            tabPanelStyle.ContentMarginLeft   = 0;
+            tabPanelStyle.ContentMarginRight  = 0;
+            tabPanelStyle.ContentMarginTop    = 0;
+            tabPanelStyle.ContentMarginBottom = 0;
+            _tabs.AddThemeStyleboxOverride("panel", tabPanelStyle);
+
+            (_deckPage,   var ds)  = MakePage("드로우 덱", BuildHeader(("카드명", true), ("개수",   false)));
+            (_handPage,   var hs)  = MakePage("패",        BuildHeader(("카드명", true), ("코스트", false), ("피해", false), ("방어", false)));
+            (_relicPage,  var rs)  = MakePage("유물",      BuildHeader(("유물명", true)));
+            (_potionPage, var ps)  = MakePage("포션",      BuildHeader(("포션명", true)));
+            (_buffPage,   var bfs) = MakePage("버프",      BuildHeader(("버프명", true), ("수치",   false)));
 
             _tabs.AddChild(ds);
             _tabs.AddChild(hs);
@@ -64,7 +86,7 @@ namespace TestMode1.UI
 
         public void ShowPlayer(PlayerSnapshot snap)
         {
-            _lastSnap = snap;
+            _lastSnap        = snap;
             _currentPlayerId = snap.PlayerId;
             _titleLabel.Text = snap.PlayerName;
             RefreshContent(snap, preserveTab: false);
@@ -100,6 +122,11 @@ namespace TestMode1.UI
             }
         }
 
+        public void SetPopupSize(Vector2 size)
+        {
+            Size = size;
+        }
+
         private void ClampToScreen()
         {
             var viewport = GetViewport();
@@ -131,8 +158,8 @@ namespace TestMode1.UI
                 else
                     PopulateTab(_handPage, snap.HandCardIds, "패", 1, ImageCache.ItemType.Card, descs, imgKeys, stats);
             }
-            if (s.ShowRelics)  PopulateTab(_relicPage,  snap.RelicIds,    "유물", 2, ImageCache.ItemType.Relic,  descs, imgKeys, stats);
-            if (s.ShowPotions) PopulateTab(_potionPage, snap.PotionIds,   "포션", 3, ImageCache.ItemType.Potion, descs, imgKeys, stats);
+            if (s.ShowRelics)  PopulateTab(_relicPage,  snap.RelicIds,  "유물", 2, ImageCache.ItemType.Relic,  descs, imgKeys, stats);
+            if (s.ShowPotions) PopulateTab(_potionPage, snap.PotionIds, "포션", 3, ImageCache.ItemType.Potion, descs, imgKeys, stats);
             if (s.ShowBuffs)   PopulateBuffTab(_buffPage, snap.Buffs, "버프", 4);
 
             _tabs.SetTabHidden(0, !s.ShowDeck);
@@ -157,21 +184,18 @@ namespace TestMode1.UI
         {
             foreach (var entry in entries)
             {
-                var sb = new System.Text.StringBuilder(entry.Name);
-                if (entry.Cost.HasValue)
-                {
-                    var c = entry.Cost.Value == -1 ? "X" : entry.Cost.Value.ToString();
-                    sb.Append($"   코스트:{c}");
-                }
-                if (entry.EffectiveDamage.HasValue && entry.EffectiveDamage.Value > 0)
-                    sb.Append($"   피해:{entry.EffectiveDamage.Value}");
-                if (entry.EffectiveBlock.HasValue && entry.EffectiveBlock.Value > 0)
-                    sb.Append($"   방어:{entry.EffectiveBlock.Value}");
+                var cost = entry.Cost.HasValue
+                    ? (entry.Cost.Value == -1 ? "X" : entry.Cost.Value.ToString())
+                    : "—";
+                var dmg = (entry.EffectiveDamage.HasValue && entry.EffectiveDamage.Value > 0)
+                    ? entry.EffectiveDamage.Value.ToString() : "—";
+                var blk = (entry.EffectiveBlock.HasValue && entry.EffectiveBlock.Value > 0)
+                    ? entry.EffectiveBlock.Value.ToString() : "—";
 
                 var desc   = descriptions.GetValueOrDefault(entry.Name, "");
                 var imgKey = imageKeys.GetValueOrDefault(entry.Name, ImageCache.ToSnakeCase(entry.Name));
                 var st     = statsMap.GetValueOrDefault(entry.Name, "");
-                _pool.Acquire(sb.ToString(), imgKey, itemType, page, desc, st);
+                _pool.AcquireRow(entry.Name, cost, dmg, blk, imgKey, itemType, page, desc, st);
             }
             _tabs.SetTabTitle(tabIdx, $"{title} ({entries.Count})");
         }
@@ -181,17 +205,9 @@ namespace TestMode1.UI
         {
             foreach (var buff in buffs)
             {
-                string display;
-                if (buff.Amount != 0)
-                {
-                    var sign = (!buff.IsDebuff && buff.Amount > 0) ? "+" : "";
-                    display = $"{buff.Name}   {sign}{buff.Amount}";
-                }
-                else
-                {
-                    display = buff.Name;
-                }
-                _pool.Acquire(display, "", ImageCache.ItemType.Relic, page, "", "");
+                var sign      = (!buff.IsDebuff && buff.Amount > 0) ? "+" : "";
+                var amountStr = buff.Amount != 0 ? $"{sign}{buff.Amount}" : "";
+                _pool.AcquireRow(buff.Name, amountStr, "", "", "", ImageCache.ItemType.Relic, page, "", "");
             }
             _tabs.SetTabTitle(tabIdx, $"{title} ({buffs.Count})");
         }
@@ -210,11 +226,11 @@ namespace TestMode1.UI
 
             foreach (var (name, count) in groups)
             {
-                var display = count > 1 ? $"{name}  x{count}" : name;
-                var desc    = descriptions.GetValueOrDefault(name, "");
-                var imgKey  = imageKeys.GetValueOrDefault(name, ImageCache.ToSnakeCase(name));
-                var st      = statsMap.GetValueOrDefault(name, "");
-                _pool.Acquire(display, imgKey, itemType, page, desc, st);
+                var countStr = count > 1 ? $"x{count}" : "";
+                var desc     = descriptions.GetValueOrDefault(name, "");
+                var imgKey   = imageKeys.GetValueOrDefault(name, ImageCache.ToSnakeCase(name));
+                var st       = statsMap.GetValueOrDefault(name, "");
+                _pool.AcquireRow(name, countStr, "", "", imgKey, itemType, page, desc, st);
             }
 
             _tabs.SetTabTitle(tabIdx, $"{title} ({ids.Count})");
@@ -233,16 +249,64 @@ namespace TestMode1.UI
             }
         }
 
-        private static (VBoxContainer vbox, ScrollContainer scroll) MakePage(string name)
+        private static HBoxContainer BuildHeader(params (string text, bool expand)[] cols)
+        {
+            var row = new HBoxContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                CustomMinimumSize   = new Vector2(0, 28),
+            };
+            row.AddThemeConstantOverride("separation", 4);
+
+            foreach (var (text, expand) in cols)
+            {
+                var lbl = new Label
+                {
+                    Text              = text,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                lbl.AddThemeColorOverride("font_color", InspectorTheme.TextDim);
+
+                if (expand)
+                {
+                    lbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                }
+                else
+                {
+                    lbl.CustomMinimumSize   = new Vector2(InspectorTheme.ColSmall, 0);
+                    lbl.HorizontalAlignment = HorizontalAlignment.Right;
+                }
+                row.AddChild(lbl);
+            }
+            return row;
+        }
+
+        private static (VBoxContainer vbox, ScrollContainer scroll) MakePage(string name, HBoxContainer header)
         {
             var scroll = new ScrollContainer
             {
                 Name                 = name,
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                SizeFlagsHorizontal  = SizeFlags.ExpandFill,
                 SizeFlagsVertical    = SizeFlags.ExpandFill
             };
-            var vbox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.Fill };
-            scroll.AddChild(vbox);
+
+            var outer = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            scroll.AddChild(outer);
+
+            outer.AddChild(header);
+
+            var sepStyle = new StyleBoxFlat { BgColor = InspectorTheme.Separator };
+            sepStyle.ContentMarginTop    = 1;
+            sepStyle.ContentMarginBottom = 4;
+            var sep = new HSeparator();
+            sep.AddThemeStyleboxOverride("separator", sepStyle);
+            outer.AddChild(sep);
+
+            var vbox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            vbox.AddThemeConstantOverride("separation", 6);
+            outer.AddChild(vbox);
+
             return (vbox, scroll);
         }
     }

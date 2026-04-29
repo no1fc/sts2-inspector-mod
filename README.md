@@ -10,6 +10,7 @@ A Slay the Spire 2 mod that lets you inspect other players' **deck, hand, relics
 - **Detail popup** — click any player to open a tabbed view (Draw Pile / Hand / Relics / Potions / Buffs)
 - **Real-time hand stats** — hand tab shows each card's current cost, damage, and block as calculated by the game engine (including strength/dexterity scaling and mid-combat bonuses)
 - **Image tooltips** — hover over any card, relic, or potion to see its art and description
+- **Resizable popup** — drag the bottom-right corner to resize the detail popup
 - **Draggable UI** — move the overlay panel and detail popup anywhere on screen
 - **Collapse toggle** — click `─` to shrink the overlay to the toggle bar only; click `+` to expand
 - **F7 hotkey** — hide or show the entire mod UI at any time
@@ -33,7 +34,7 @@ A Slay the Spire 2 mod that lets you inspect other players' **deck, hand, relics
    ```
    The DLL is automatically copied to:
    ```
-   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\testmode1\
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2-inspector-mod\
    ```
 
 2. Place image assets at the path configured in `ModSettings` (default: `C:\AI_Folder\ClaudeCode\SlaytheSpire2\data_sts2\`):
@@ -80,6 +81,7 @@ ModStart (InspectorBootstrapper._Ready)
   ├─ ImageTooltip        — hover tooltip (image + description)
   ├─ OverlayPanel        — always-visible player list with collapse support
   ├─ PlayerDetailPopup   — per-player tabbed popup (Draw Pile/Hand/Relics/Potions/Buffs)
+  ├─ PopupResizer        — draggable resize handle for the detail popup
   └─ PlayerDataPoller    — polls game state via Reflection every 1.5 s
        ├─ PlayerUpdated  → OverlayPanel + PlayerDetailPopup refresh
        └─ PlayerRemoved  → OverlayPanel cleanup
@@ -97,19 +99,6 @@ Cards use one of two VarSet patterns:
 | Scaling | Soul Storm, Unleash | `CalculationBase(base=9)` + `CalculatedDamage` |
 
 The poller reads `CanonicalValue` (the live engine value) when available, falling back to `BaseValue`. When a canonical value is used, strength/dexterity bonuses are not added manually since they are already included.
-
-## Debugging
-
-Filter the game log with these prefixes:
-
-```
-[Inspector]   # polling, snapshot events, hand card stats
-[ImageCache]  # texture load success / failure
-```
-
-First-encounter dumps (one per session per type):
-- `[Inspector] PlayerProps: ...` — player object properties (helps identify Steam name field)
-- `[Inspector] VarSet '...': ...` — card variable keys and values
 
 ## License
 

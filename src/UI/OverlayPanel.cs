@@ -20,22 +20,30 @@ namespace TestMode1.UI
         private readonly Dictionary<string, HBoxContainer> _rowsByPlayerId = new();
         private readonly Dictionary<string, Label[]> _countLabelsByPlayerId = new();
         private readonly Dictionary<string, PlayerSnapshot> _lastSnaps = new();
+        private readonly Dictionary<string, HSeparator> _separatorsByPlayerId = new();
 
         public override void _Ready()
         {
             var settings = ModSettings.Instance;
 
-            Position = new Vector2(settings.PanelX, settings.PanelY);
+            Position    = new Vector2(settings.PanelX, settings.PanelY);
             MouseFilter = MouseFilterEnum.Stop;
+
+            AddThemeStyleboxOverride("panel",
+                InspectorTheme.MakeBox(InspectorTheme.BgPanel, InspectorTheme.Border, 6, 8, 6));
 
             var root = new VBoxContainer();
             AddChild(root);
 
             // Toggle bar
             var toggleBar = new HBoxContainer();
+            toggleBar.AddThemeConstantOverride("separation", 4);
             root.AddChild(toggleBar);
 
-            _btnCollapse = new Button { Text = "─" };
+            _btnCollapse = new Button { Text = "─", Flat = true };
+            _btnCollapse.AddThemeColorOverride("font_color",         InspectorTheme.Gold);
+            _btnCollapse.AddThemeColorOverride("font_color_hover",   InspectorTheme.GoldHover);
+            _btnCollapse.AddThemeColorOverride("font_color_pressed", InspectorTheme.GoldHover);
             _btnCollapse.Pressed += OnCollapsePressed;
             toggleBar.AddChild(_btnCollapse);
 
@@ -43,9 +51,7 @@ namespace TestMode1.UI
             _btnHand    = MakeToggle("패",   settings.ShowHand,    () => { ModSettings.Instance.SetToggle("hand",    _btnHand.ButtonPressed);    RefreshAllRows(); });
             _btnRelics  = MakeToggle("유물", settings.ShowRelics,  () => { ModSettings.Instance.SetToggle("relics",  _btnRelics.ButtonPressed);  RefreshAllRows(); });
             _btnPotions = MakeToggle("포션", settings.ShowPotions, () => { ModSettings.Instance.SetToggle("potions", _btnPotions.ButtonPressed); RefreshAllRows(); });
-
-            _btnBuffs = MakeToggle("버프", settings.ShowBuffs,
-                () => { ModSettings.Instance.SetToggle("buffs", _btnBuffs.ButtonPressed); RefreshAllRows(); });
+            _btnBuffs   = MakeToggle("버프", settings.ShowBuffs,   () => { ModSettings.Instance.SetToggle("buffs",   _btnBuffs.ButtonPressed);   RefreshAllRows(); });
 
             toggleBar.AddChild(_btnDeck);
             toggleBar.AddChild(_btnHand);
@@ -55,12 +61,13 @@ namespace TestMode1.UI
 
             _scroll = new ScrollContainer
             {
-                CustomMinimumSize = new Vector2(0, 400),
+                CustomMinimumSize    = new Vector2(0, 400),
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
             };
             root.AddChild(_scroll);
 
             _playerRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.Fill };
+            _playerRows.AddThemeConstantOverride("separation", 2);
             _scroll.AddChild(_playerRows);
         }
 
@@ -79,6 +86,11 @@ namespace TestMode1.UI
             row.QueueFree();
             _rowsByPlayerId.Remove(playerId);
             _countLabelsByPlayerId.Remove(playerId);
+            if (_separatorsByPlayerId.TryGetValue(playerId, out var sep))
+            {
+                sep.QueueFree();
+                _separatorsByPlayerId.Remove(playerId);
+            }
         }
 
         // Drag support
@@ -106,7 +118,19 @@ namespace TestMode1.UI
 
         private HBoxContainer CreateRow(PlayerSnapshot snap)
         {
+            if (_rowsByPlayerId.Count > 0)
+            {
+                var sep = new HSeparator();
+                var sepStyle = new StyleBoxFlat { BgColor = InspectorTheme.Separator };
+                sepStyle.ContentMarginTop    = 1;
+                sepStyle.ContentMarginBottom = 1;
+                sep.AddThemeStyleboxOverride("separator", sepStyle);
+                _playerRows.AddChild(sep);
+                _separatorsByPlayerId[snap.PlayerId] = sep;
+            }
+
             var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
 
             var displayText = snap.CharacterName.Length > 0
                 ? $"{snap.PlayerName}\n{snap.CharacterName}"
@@ -114,17 +138,28 @@ namespace TestMode1.UI
 
             var nameBtn = new Button
             {
-                Text = displayText,
-                Flat = true,
+                Text              = displayText,
+                Flat              = true,
                 CustomMinimumSize = new Vector2(120, 0),
-                Alignment = HorizontalAlignment.Left
+                Alignment         = HorizontalAlignment.Left
             };
+            nameBtn.AddThemeColorOverride("font_color",         InspectorTheme.Gold);
+            nameBtn.AddThemeColorOverride("font_color_hover",   InspectorTheme.GoldHover);
+            nameBtn.AddThemeColorOverride("font_color_pressed", InspectorTheme.GoldHover);
+            nameBtn.AddThemeStyleboxOverride("normal",  InspectorTheme.MakeTransparent());
+            nameBtn.AddThemeStyleboxOverride("hover",   InspectorTheme.MakeBox(InspectorTheme.BgRow, null, 3, 4, 2));
+            nameBtn.AddThemeStyleboxOverride("pressed", InspectorTheme.MakeTransparent());
             nameBtn.Pressed += () => EmitSignal(SignalName.PlayerRowClicked, snap.PlayerId);
 
             var deckLbl   = new Label { CustomMinimumSize = new Vector2(50, 0) };
             var relicLbl  = new Label { CustomMinimumSize = new Vector2(50, 0) };
             var potionLbl = new Label { CustomMinimumSize = new Vector2(50, 0) };
             var buffLbl   = new Label { CustomMinimumSize = new Vector2(50, 0) };
+
+            deckLbl.AddThemeColorOverride("font_color",   InspectorTheme.ColDeck);
+            relicLbl.AddThemeColorOverride("font_color",  InspectorTheme.ColRelic);
+            potionLbl.AddThemeColorOverride("font_color", InspectorTheme.ColPotion);
+            buffLbl.AddThemeColorOverride("font_color",   InspectorTheme.ColPotion);
 
             row.AddChild(nameBtn);
             row.AddChild(deckLbl);
@@ -171,7 +206,13 @@ namespace TestMode1.UI
         private static CheckButton MakeToggle(string text, bool initial, System.Action onToggle)
         {
             var btn = new CheckButton { Text = text, ButtonPressed = initial };
-            btn.Toggled += _ => onToggle();
+            btn.AddThemeColorOverride("font_color", initial ? InspectorTheme.Gold : InspectorTheme.TextMain);
+            btn.Toggled += pressed =>
+            {
+                btn.AddThemeColorOverride("font_color",
+                    pressed ? InspectorTheme.Gold : InspectorTheme.TextMain);
+                onToggle();
+            };
             return btn;
         }
     }

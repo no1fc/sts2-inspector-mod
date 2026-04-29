@@ -26,7 +26,6 @@ namespace TestMode1
         {
             _basePath = basePath;
             Instance  = this;
-            GD.Print($"[ImageCache] Init basePath={basePath}");
         }
 
         public Texture2D GetTexture(string displayName, ItemType type)
@@ -117,7 +116,6 @@ namespace TestMode1
             }
             try
             {
-                GD.Print($"[ImageCache] Loading atlas: {Path.GetFileName(path)}");
                 var bytes = File.ReadAllBytes(path);
                 var img   = new Image();
                 var err   = img.LoadPngFromBuffer(bytes);
