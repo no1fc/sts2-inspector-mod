@@ -8,12 +8,18 @@ namespace TestMode1.UI
         [Signal]
         public delegate void PlayerRowClickedEventHandler(string playerId);
 
+        [Signal]
+        public delegate void ToggleChangedEventHandler();
+
         private VBoxContainer _playerRows;
+        private ScrollContainer _scroll;
+        private Button _btnCollapse;
         private CheckButton _btnDeck, _btnHand, _btnRelics, _btnPotions;
         private bool _collapsed = false;
 
         private readonly Dictionary<string, HBoxContainer> _rowsByPlayerId = new();
         private readonly Dictionary<string, Label[]> _countLabelsByPlayerId = new();
+        private readonly Dictionary<string, PlayerSnapshot> _lastSnaps = new();
 
         public override void _Ready()
         {
@@ -29,41 +35,42 @@ namespace TestMode1.UI
             var toggleBar = new HBoxContainer();
             root.AddChild(toggleBar);
 
-            var btnCollapse = new Button { Text = "─" };
-            btnCollapse.Pressed += OnCollapsePressed;
-            toggleBar.AddChild(btnCollapse);
+            _btnCollapse = new Button { Text = "─" };
+            _btnCollapse.Pressed += OnCollapsePressed;
+            toggleBar.AddChild(_btnCollapse);
 
-            _btnDeck    = MakeToggle("덱",   settings.ShowDeck,    () => ModSettings.Instance.SetToggle("deck",    _btnDeck.ButtonPressed));
-            _btnHand    = MakeToggle("패",   settings.ShowHand,    () => ModSettings.Instance.SetToggle("hand",    _btnHand.ButtonPressed));
-            _btnRelics  = MakeToggle("유물", settings.ShowRelics,  () => ModSettings.Instance.SetToggle("relics",  _btnRelics.ButtonPressed));
-            _btnPotions = MakeToggle("포션", settings.ShowPotions, () => ModSettings.Instance.SetToggle("potions", _btnPotions.ButtonPressed));
+            _btnDeck    = MakeToggle("덱",   settings.ShowDeck,    () => { ModSettings.Instance.SetToggle("deck",    _btnDeck.ButtonPressed);    RefreshAllRows(); });
+            _btnHand    = MakeToggle("패",   settings.ShowHand,    () => { ModSettings.Instance.SetToggle("hand",    _btnHand.ButtonPressed);    RefreshAllRows(); });
+            _btnRelics  = MakeToggle("유물", settings.ShowRelics,  () => { ModSettings.Instance.SetToggle("relics",  _btnRelics.ButtonPressed);  RefreshAllRows(); });
+            _btnPotions = MakeToggle("포션", settings.ShowPotions, () => { ModSettings.Instance.SetToggle("potions", _btnPotions.ButtonPressed); RefreshAllRows(); });
 
             toggleBar.AddChild(_btnDeck);
             toggleBar.AddChild(_btnHand);
             toggleBar.AddChild(_btnRelics);
             toggleBar.AddChild(_btnPotions);
 
-            var scroll = new ScrollContainer
+            _scroll = new ScrollContainer
             {
                 CustomMinimumSize = new Vector2(0, 400),
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
             };
-            root.AddChild(scroll);
+            root.AddChild(_scroll);
 
             _playerRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.Fill };
-            scroll.AddChild(_playerRows);
+            _scroll.AddChild(_playerRows);
         }
 
         public void UpdatePlayer(PlayerSnapshot snap)
         {
-            if (!_rowsByPlayerId.TryGetValue(snap.PlayerId, out var row))
-                row = CreateRow(snap.PlayerId, snap.PlayerName);
-
+            _lastSnaps[snap.PlayerId] = snap;
+            if (!_rowsByPlayerId.ContainsKey(snap.PlayerId))
+                CreateRow(snap.PlayerId, snap.PlayerName);
             RefreshRow(snap.PlayerId, snap);
         }
 
         public void RemovePlayer(string playerId)
         {
+            _lastSnaps.Remove(playerId);
             if (!_rowsByPlayerId.TryGetValue(playerId, out var row)) return;
             row.QueueFree();
             _rowsByPlayerId.Remove(playerId);
@@ -97,7 +104,6 @@ namespace TestMode1.UI
         {
             var row = new HBoxContainer();
 
-            // 플레이어 이름을 버튼으로 만들어 클릭 처리
             var nameBtn = new Button
             {
                 Text = playerName,
@@ -135,10 +141,18 @@ namespace TestMode1.UI
             labels[2].Visible = s.ShowPotions;
         }
 
+        private void RefreshAllRows()
+        {
+            foreach (var (id, snap) in _lastSnaps)
+                RefreshRow(id, snap);
+            EmitSignal(SignalName.ToggleChanged);
+        }
+
         private void OnCollapsePressed()
         {
             _collapsed = !_collapsed;
-            _playerRows.Visible = !_collapsed;
+            _scroll.Visible = !_collapsed;
+            _btnCollapse.Text = _collapsed ? "+" : "─";
         }
 
         private static CheckButton MakeToggle(string text, bool initial, System.Action onToggle)

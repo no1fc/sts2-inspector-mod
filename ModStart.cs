@@ -60,6 +60,8 @@ public partial class InspectorBootstrapper : Node
             if (snap != null) popup.ShowPlayer(snap);
         };
 
+        overlay.ToggleChanged += () => popup.ForceRefreshCurrent();
+
         GD.Print("[Inspector] UI ready.");
     }
 }

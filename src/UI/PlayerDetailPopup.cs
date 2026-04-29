@@ -9,6 +9,7 @@ namespace TestMode1.UI
         private CardNodePool  _pool;
         private string        _currentPlayerId;
         private ImageTooltip  _tooltip;
+        private PlayerSnapshot _lastSnap;
 
         private Label         _titleLabel;
         private TabContainer  _tabs;
@@ -61,6 +62,7 @@ namespace TestMode1.UI
 
         public void ShowPlayer(PlayerSnapshot snap)
         {
+            _lastSnap = snap;
             _currentPlayerId = snap.PlayerId;
             _titleLabel.Text = snap.PlayerName;
             RefreshContent(snap);
@@ -71,7 +73,16 @@ namespace TestMode1.UI
         public void RefreshIfShowing(PlayerSnapshot snap)
         {
             if (Visible && snap.PlayerId == _currentPlayerId)
+            {
+                _lastSnap = snap;
                 RefreshContent(snap);
+            }
+        }
+
+        public void ForceRefreshCurrent()
+        {
+            if (Visible && _lastSnap != null)
+                RefreshContent(_lastSnap);
         }
 
         public override void _GuiInput(InputEvent ev)
